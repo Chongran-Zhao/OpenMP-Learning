@@ -13,8 +13,11 @@ set(CMAKE_CXX_FLAGS "-g -Wall -O3 ${OpenMP_CXX_FLAGS} -pg")
 
 include_directories(.)
 
-add_executable(hello_world hello_world.cpp)
+add_executable(example1 example1.cpp)
+add_executable(example2 example2.cpp)
 
-target_link_libraries(hello_world OpenMP::OpenMP_CXX)
+target_link_libraries(example1 OpenMP::OpenMP_CXX)
+target_link_libraries(example2 OpenMP::OpenMP_CXX)
 
-set_target_properties(hello_world PROPERTIES LINK_FLAGS "-pg")
+set_target_properties(example1 PROPERTIES LINK_FLAGS "-pg")
+set_target_properties(example2 PROPERTIES LINK_FLAGS "-pg")
