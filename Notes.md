@@ -99,6 +99,11 @@ int main()
 ```
 **Remark**: You need to manually assign each thread the number that needs to be executed in the loop, based on the index of threads. The ```long``` type  variable is used to output a more accurate execution time.
 
+**Summary**: 
+- Use ```include <omp.h> ``` to insert the library of *OpenMP*.
+- Use ```omp_set_num_threads(NUM_THREADS);``` to set the number of threads.
+- Use ```omp_get_threads_num();``` to get the *id* of threads.
+- Use ```omp_get_num_threads();``` to get the *number* of threads.
 # False Sharing
 
 False sharing is a phenomenon that occurs in parallel programming when multiple threads or processors inadvertently share the same cache line, resulting in performance degradation. It is a performance issue rather than an actual sharing of data.
