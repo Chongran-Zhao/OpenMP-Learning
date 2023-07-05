@@ -1,8 +1,3 @@
-<style>
-table {
-margin: auto;
-}
-</style>
 # Shared Address Based Architecture: SMP & NUMA
 ## Symmetric Multiprocessing
 In SMP systems, multiple processors are connected to a single shared memory system. All processors have equal access to the shared memory, which means that any processor can access any memory location without any significant difference in memory access time. This symmetric access pattern is the key characteristic of SMP. Some other key points are as following:
@@ -102,7 +97,10 @@ int main()
   return 0;
 } 
 ```
+**Remark**: You need to manually assign each thread the number that needs to be executed in the loop, based on the index of threads. The ```long``` type  variable is used to output a more accurate execution time.
+
 # False Sharing
+
 False sharing is a phenomenon that occurs in parallel programming when multiple threads or processors inadvertently share the same cache line, resulting in performance degradation. It is a performance issue rather than an actual sharing of data.
 
 In modern computer architectures, the memory system is typically organized into cache lines. A cache line is a fixed-size block of memory (e.g., 64 bytes) that is loaded from main memory into the cache. When a processor accesses a memory location, it brings the entire cache line containing that location into its local cache.
@@ -122,27 +120,14 @@ Detecting false sharing requires careful performance profiling, monitoring cache
 
 In example2, I also use `omp_get_time()` to output the time of running codes in order to reveal the fact of false sharing, here is the results of using different number of threads:
 
-<!-- 让表格居中显示的风格 -->
-<style>
-.center 
-{
-  width: auto;
-  display: table;
-  margin-left: auto;
-  margin-right: auto;
-}
-</style>
-
-<div class="center">
 
 | Number of Threads  | Consuming Time (s)|
-| :---: | :---: | 
+| :---: | :---: |
 |  1   |   0.025067   |
 |   2   |   0.013962   |
 |   4  |   0.007185  |
 |8     |    0.005292    |
 |16 | 0.004983|
-</div>
 
 The time consuming can’t decrease linearly as the number of threads gets larger.
 
