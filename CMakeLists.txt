@@ -15,6 +15,10 @@ include_directories(.)
 
 add_executable(example1 example1.cpp)
 add_executable(example2 example2.cpp)
+add_executable(example3 example3.cpp)
+add_executable(example2_revised example2_revised.cpp)
 
 target_link_libraries(example1 OpenMP::OpenMP_CXX)
 target_link_libraries(example2 OpenMP::OpenMP_CXX)
+target_link_libraries(example3 OpenMP::OpenMP_CXX)
+target_link_libraries(example2_revised OpenMP::OpenMP_CXX)

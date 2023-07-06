@@ -55,14 +55,16 @@ int main()
 } 
 ```
 # Fork-join Parallelism
-![1](figures/IMG_1.png)
+<img src="/Users/chongran/OpenMP-Learning/figures/IMG_1.png" alt="IMG_1" style="zoom:45%;" />
 Fork-join parallelism is a programming model and execution pattern that allows for the efficient execution of parallel tasks. It consists of two main phases: the "fork" phase and the "join" phase.
+
 1.  Fork Phase: In the fork phase, a task or a computation is divided into smaller subtasks, creating a parallel execution hierarchy. Each subtask is assigned to a separate thread or worker, and these threads execute their respective subtasks concurrently. This phase is called "fork" because the parent task spawns multiple child tasks, creating a parallel execution flow.
 2.  Join Phase: In the join phase, the threads or workers wait for their subtasks to complete. Once all the subtasks have finished executing, the threads synchronize and join together, consolidating the results of their computations. This synchronization point ensures that all subtasks have completed before proceeding further. This phase is called "join" because the parallel execution flow is consolidated back into a single flow.
 
 The fork-join parallelism model is often implemented using parallel programming frameworks or APIs such as OpenMP, Java's Fork/Join framework, or the Cilk programming language.
 
 ## Example2
+
 ```cpp
 #include<stdio.h>
 #include"omp.h"
@@ -100,10 +102,11 @@ int main()
 **Remark**: You need to manually assign each thread the number that needs to be executed in the loop, based on the index of threads. The ```long``` type  variable is used to output a more accurate execution time.
 
 **Summary**: 
-- Use ```include <omp.h> ``` to insert the library of *OpenMP*.
+- Use ```include![ IMG_2](/Users/chongran/OpenMP-Learning/figures/ IMG_2.png)<omp.h> ``` to insert the library of *OpenMP*.
 - Use ```omp_set_num_threads(NUM_THREADS);``` to set the number of threads.
 - Use ```omp_get_threads_num();``` to get the *id* of threads.
 - Use ```omp_get_num_threads();``` to get the *number* of threads.
+
 # False Sharing
 
 False sharing is a phenomenon that occurs in parallel programming when multiple threads or processors inadvertently share the same cache line, resulting in performance degradation. It is a performance issue rather than an actual sharing of data.
@@ -126,15 +129,173 @@ Detecting false sharing requires careful performance profiling, monitoring cache
 In example2, I also use `omp_get_time()` to output the time of running codes in order to reveal the fact of false sharing, here is the results of using different number of threads:
 
 
-| Number of Threads  | Consuming Time (s)|
-| :---: | :---: |
-|  1   |   0.025067   |
-|   2   |   0.013962   |
-|   4  |   0.007185  |
-|8     |    0.005292    |
-|16 | 0.004983|
+| Number of Threads  | Consuming Time (s) (Macbook Air)|Consuming Time (s) (Macbook Pro)|
+| :---: | :---: | :---: |
+|  1   |   0.025067   | 0.019296|
+|   2   |   0.013962   | 0.010428|
+|   4  |   0.007185  | 0.005739|
+|8     |    0.005292    |0.003425|
+|16 | 0.004983|0.003287|
 
 The time consuming can’t decrease linearly as the number of threads gets larger.
 
+## Example3 (way to solve *False Sharing*)
+```cpp
+#include<stdio.h>
+#include"omp.h"
+#define NUM_THREADS 16
+#define PAD 8 // assume 64 byte L1 cache line size
+static long num_steps = 10000000;
+double dx;
 
+int main()
+{
+  int i, nthreads;
+  long double pi, sum[NUM_THREADS][PAD];
+  long double start_time, end_time;
+  dx = 1.0 / (long double) num_steps;
+  omp_set_num_threads(NUM_THREADS);
+  start_time = omp_get_wtime();
+#pragma omp parallel
+  {
+    int i, id;
+    long double x;
+    id = omp_get_thread_num();
+    nthreads = omp_get_num_threads();
+    for (i = id, sum[id][0] = 0.0; i < num_steps; i = i+nthreads)
+    {
+      x = (i + 0.5) * dx;
+      sum[id][0] += 4.0 / (1.0 + x*x);
+    }
+  }
+  for (i = 0,pi = 0.0; i < NUM_THREADS; i++) pi += sum[i][0] * dx;
+  end_time = omp_get_wtime();
+  printf("The numerical integration of pi is %.10Lf.\n", pi);
+  printf("Execution time: %Lf seconds.", end_time - start_time);
+  return 0;
+} 
+```
+**Notes**: Use ```#define PAD 8``` to avoid the conflicts caused by different threads reading the same block of memory.
+**Remark**: The method is ugly.
 
+MacBook Pro CPU information:
+	*machdep.cpu.cores_per_package: 12
+	machdep.cpu.core_count: 12
+	machdep.cpu.logical_per_package: 12
+	machdep.cpu.thread_count: 12
+	machdep.cpu.brand_string: Apple M2 Pro*
+
+| Number of Threads  | Consuming Time (s) (Example3)|Consuming Time (s) (Example2)|
+| :---: | :---: | :---: |
+|  1   |   0.019267   | 0.019296|
+|   2   |   0.010408   | 0.010428|
+|   4  |   0.005772  | 0.005739|
+|8     |    0.003344    |0.003425|
+|16 | 0.003456|0.003287|
+
+**Comment**: The example is too simple to demonstrate the effectiveness of CPU's advanced performance in resolving false sharing issues. Another reason is that , the device nowadays has large memory, and *Fasle Sharing* hardly happens when processing some simple data.
+
+# Synchronization
+
+- **Barrier Synchronization**: Each thread wait at the *barrier* until all threads arrive (left figure).
+
+```c++
+  #pragma omp parallel
+  {
+  	int id = omp_get_thread_num();
+    A[id] = big_cal1(id); // big_cal1 is a function
+    #pragma omp barrier
+    B[id] = big_cal2(id,A);
+  }
+```
+
+- **Mutual Exclusion Synchronization**: Define a block of code that only one thread at a time can execute (right figure).
+
+  ```c++
+  float res;
+  #pragma omp parallel
+  {
+    float B; int i, id, num;
+    id = omp_get_thread_num();
+    num = omp_get_num_threads();
+    for (i = id; i < niters; i+ = num)
+    {
+      B = big_job(i); // big job is executed in for-loop
+      #pragma omp critical
+      res += consume(B);
+    }
+  }```
+
+​                         <img src="/Users/chongran/OpenMP-Learning/figures/ IMG_2.png" alt=" IMG_2" style="zoom:60%;" />                          <img src="/Users/chongran/OpenMP-Learning/figures/IMG_3.png" alt="IMG_3" style="zoom: 35%;" />
+
+- **Atomic Synchronization**: suitable for updating simple binary values, such as incrementing, or reading and writing a temporary value for updating.
+
+  ```c++
+  #pragma omp parallel
+  {
+  	double tmp, B;
+  	B = DOIT();
+  	tmp = big_ugly(B);
+  	#pragma omp atomic
+  	X+ = tmp;
+  }
+  ```
+
+***Notes***: The statement inside the atomic *must* be one of the following forms: ```x+ = expr```, ```x- = expr```, ```x++```, ```++x```, ```x--```, ```--x```.
+
+## Example2_revised (use Mutual Exclusion Synchronization)
+
+```cpp
+#include<stdio.h>
+#include"omp.h"
+#define NUM_THREADS 1
+static long num_steps = 1000000;
+double dx;
+
+int main()
+{
+  int i, num_threads;
+  long double pi = 0.0;
+  long double sum;
+  long double start_time, end_time;
+  dx = 1.0 / (long double) num_steps;
+  omp_set_num_threads(NUM_THREADS);
+  start_time = omp_get_wtime();
+	#pragma omp parallel
+  {
+    int id;
+    long double x;
+    id = omp_get_thread_num();
+    num_threads = omp_get_num_threads();
+    for (i = id, sum = 0.0; i < num_steps; i = i+num_threads)  
+    {
+      x = (i + 0.5) * dx;
+      sum += 4.0 / (1.0 + x*x);
+    }
+    #pragma omp critical
+    pi += sum * dx;
+  }
+  end_time = omp_get_wtime();
+  printf("The numerical integration of pi is %.10Lf.\n", pi);
+  printf("Execution time: %Lf seconds.", end_time - start_time);
+  return 0;
+}
+```
+# Worksharing
+
+- Loop Construct
+- Sections/Section Construct
+- Single Construct
+- Task Construct
+
+## Loop Work Sharing
+```cpp
+#pragma omp parallel
+{
+#pragma omp for
+	for (i = 0; i < N; i++)
+	{
+		NEAT_STUFF(i);
+	}
+}
+```
