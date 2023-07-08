@@ -1,4 +1,5 @@
 # Shared Address Based Architecture: SMP & NUMA
+
 ## Symmetric Multiprocessing
 In SMP systems, multiple processors are connected to a single shared memory system. All processors have equal access to the shared memory, which means that any processor can access any memory location without any significant difference in memory access time. This symmetric access pattern is the key characteristic of SMP. Some other key points are as following:
 - SMP systems typically have a small number of processors, ranging from a few to a couple of dozen.
@@ -55,7 +56,7 @@ int main()
 } 
 ```
 # Fork-join Parallelism
-<img src="/Users/chongran/OpenMP-Learning/figures/IMG_1.png" alt="IMG_1" style="zoom:45%;" />
+<img src="./figures/IMG_1.png" alt="IMG_1" style="zoom:45%;" />
 Fork-join parallelism is a programming model and execution pattern that allows for the efficient execution of parallel tasks. It consists of two main phases: the "fork" phase and the "join" phase.
 
 1.  Fork Phase: In the fork phase, a task or a computation is divided into smaller subtasks, creating a parallel execution hierarchy. Each subtask is assigned to a separate thread or worker, and these threads execute their respective subtasks concurrently. This phase is called "fork" because the parent task spawns multiple child tasks, creating a parallel execution flow.
@@ -226,7 +227,7 @@ MacBook Pro CPU information:
     }
   }```
 
-​                         <img src="/Users/chongran/OpenMP-Learning/figures/ IMG_2.png" alt=" IMG_2" style="zoom:60%;" />                          <img src="/Users/chongran/OpenMP-Learning/figures/IMG_3.png" alt="IMG_3" style="zoom: 35%;" />
+​                         <img src="./figures/ IMG_2.png" alt=" IMG_2" style="zoom:60%;" />                          <img src="./figures/IMG_3.png" alt="IMG_3" style="zoom: 35%;" />
 
 - **Atomic Synchronization**: suitable for updating simple binary values, such as incrementing, or reading and writing a temporary value for updating.
 
