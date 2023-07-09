@@ -1,6 +1,4 @@
-# 
-
-Shared Address Based Architecture: SMP & NUMA
+# Shared Address Based Architecture: SMP & NUMA
 
 ## Symmetric Multiprocessing
 In SMP systems, multiple processors are connected to a single shared memory system. All processors have equal access to the shared memory, which means that any processor can access any memory location without any significant difference in memory access time. This symmetric access pattern is the key characteristic of SMP. Some other key points are as following:
@@ -57,7 +55,10 @@ int main()
     }
 } 
 ```
+**Notes**: I didn't use ```omp_set_num_threads(num_threads)``` to set the number of threads *OpenMP* will use. By default, OpenMP will use the number of threads specified by the environment variable ```OMP_NUM_THREADS``` or, if not set, it will use the default number of threads provided by the system.
+
 # Fork-join Parallelism
+
 <img src="./figures/IMG_1.png" alt="IMG_1" style="zoom:45%;" />
 Fork-join parallelism is a programming model and execution pattern that allows for the efficient execution of parallel tasks. It consists of two main phases: the "fork" phase and the "join" phase.
 
@@ -67,6 +68,10 @@ Fork-join parallelism is a programming model and execution pattern that allows f
 The fork-join parallelism model is often implemented using parallel programming frameworks or APIs such as OpenMP, Java's Fork/Join framework, or the Cilk programming language.
 
 ## Example2
+
+$$
+\int_0^1 \frac{4}{1+x^2}dx=4\arctan x\big|_0^1=\pi\approx 3.14159=\sum_{i=0}^n\frac{4}{1+x^2}\Delta x,\quad x=(i+0.5)\Delta x,\quad \Delta x=\frac{1}{n}
+$$
 
 ```c#
 #include<stdio.h>
@@ -348,6 +353,14 @@ int main()
   
   Similar to the static schedule, you can also specify the chunk size explicitly using the `chunk` clause with the `schedule(dynamic, chunk_size)` syntax. By default, if the chunk size is not specified, the OpenMP runtime system determines a suitable value based on the number of threads and the total number of iterations. Also note that combined construct: `#pragma omp parallel` + `#parallel omp for` = `#parallel omp parallel for`.
   
+  **Remark**: The difference in execution time between the static and dynamic schedules can be attributed to the inherent characteristics of the scheduling options and the nature of the computation being performed.
+  
+  In the static schedule, the loop iterations are divided into equal-sized chunks, and each thread is assigned a contiguous block of iterations. This allows the iterations to be distributed evenly among the threads, resulting in better load balancing. Since the workload is evenly distributed, the threads can work more efficiently and complete their assigned iterations faster, resulting in a shorter execution time.
+  
+  On the other hand, in the dynamic schedule, the loop iterations are distributed dynamically among the threads in smaller chunks. This can introduce additional overhead due to the dynamic nature of scheduling. The overhead includes the need for thread synchronization, task distribution, and potential load imbalance. As a result, the dynamic schedule might have a longer execution time compared to the static schedule, especially when the computation is relatively small or there is a higher overhead associated with task distribution.
+  
+  It's important to note that the performance difference between scheduling options can vary depending on the specific workload, the number of threads, and the characteristics of the underlying hardware. It's recommended to experiment with different scheduling options and parameters to find the most suitable configuration for your specific application and hardware setup.
+
 ## Working With Loops
 
 - Find the *compute-intensive* loops.
@@ -421,3 +434,172 @@ int main()
 | Max | *Most neg num* | \|\| |0|
 
 The initial value of variable to be reduced is very important.
+
+## Discussion
+
+**In OpenMP, the scope and visibility of variables can have different effects depending on whether they are declared inside or outside of a parallel region.**
+
+1. Variables declared outside the `#pragma omp parallel` directive:
+   - These variables have a scope that extends beyond the parallel region.
+   - They are shared among all threads in the parallel region, meaning that each thread can read and write to the same memory location.
+   - Changes made to these variables by any thread are visible to all other threads.
+   - It's important to note that proper synchronization mechanisms, such as using OpenMP constructs like `reduction` or `critical`, should be employed to avoid data races or inconsistent results when multiple threads access and modify shared variables simultaneously.
+2. Variables declared inside the `#pragma omp parallel` directive:
+   - These variables have a scope limited to the parallel region.
+   - They are private to each thread, meaning that each thread has its own copy of the variable.
+   - Each thread can independently read from and write to its private copy of the variable without affecting the copies of other threads.
+   - The initial value of a private variable is undefined. If you want to initialize private variables, you should do so explicitly within the parallel region.
+
+Here's an example illustrating the difference:
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int global_variable = 0;
+
+int main() {
+    #pragma omp parallel
+    {
+        int private_variable = omp_get_thread_num();
+        global_variable += private_variable;
+
+        printf("Thread %d: private_variable = %d, global_variable = %d\n",
+               omp_get_thread_num(), private_variable, global_variable);
+    }
+
+    printf("After parallel region: global_variable = %d\n", global_variable);
+
+    return 0;
+}
+```
+
+In the example above, `global_variable` is declared outside the parallel region and is shared among all threads. Each thread has its private copy of `private_variable` declared inside the parallel region. The code increments `global_variable` by the value of `private_variable` for each thread.
+
+After the parallel region, the value of `global_variable` will reflect the accumulated contributions from all threads. However, note that accessing `global_variable` without proper synchronization mechanisms (e.g., `atomic`, `critical`, or `reduction`) may lead to race conditions and incorrect results.
+
+Understanding the scope and visibility of variables in OpenMP is crucial for proper parallel programming. Proper usage of shared and private variables helps ensure correctness and avoid race conditions when multiple threads are involved.
+
+### How to avoid data races and false sharing 
+
+- **Private Variables**: Declare variables as private to each thread to ensure that each thread operates on its own private copy of the variable.
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+#define ARRAY_SIZE 1000
+
+int main() {
+    int shared_array[ARRAY_SIZE];
+    int private_sum = 0;
+    #pragma omp parallel private(private_sum)
+    {
+        int thread_id = omp_get_thread_num();
+        // Each thread operates on its own private_sum variable
+        for (int i = thread_id; i < ARRAY_SIZE; i += omp_get_num_threads()) {
+            private_sum += shared_array[i];
+        }
+        printf("Thread %d: private_sum = %d\n", thread_id, private_sum);
+    }
+    return 0;
+}
+```
+
+Note that the `private_sum` outside of the parallel region didn't get updated.
+
+- **Reduction Operations**: Use reduction operations to perform parallel reductions on shared variables. OpenMP automatically handles synchronization and combination of partial results into a single value.
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+    int sum = 0;
+    int num_iterations = 100;
+    #pragma omp parallel for reduction(+:sum)
+    for (int i = 0; i < num_iterations; i++) {
+        sum += i;
+    }
+    printf("Sum: %d\n", sum);
+    return 0;
+}
+```
+
+- **Atomic Operations**: Use atomic operations to ensure that specific operations are executed atomically without data races. Atomic operations are performed on shared variables and guarantee that the operation completes without interruption.
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+    int shared_var = 0;
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        // Perform atomic increment operation on shared_var
+        #pragma omp atomic
+        shared_var += thread_id;
+        printf("Thread %d: shared_var = %d\n", thread_id, shared_var);
+    }
+    printf("After parallel region: shared_var = %d\n", shared_var);
+    return 0;
+}
+```
+
+- **Critical Sections**: Use critical sections to protect shared variables from simultaneous access. Only one thread can execute the critical section at a time, preventing data races.
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+  
+int main() {
+    int shared_var = 0;
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        // Perform increment operation within a critical section
+        #pragma omp critical
+        shared_var += thread_id;
+        printf("Thread %d: shared_var = %d\n", thread_id, shared_var);
+    }
+    printf("After parallel region: shared_var = %d\n", shared_var);
+    return 0;
+}
+```
+
+By employing private variables, reduction operations, atomic operations, and critical sections as necessary, you can mitigate data races and false sharing problems in OpenMP parallel regions, ensuring the correctness and performance of your parallel code.
+
+## Example4
+
+```c#
+#include<stdio.h>
+#include"omp.h"
+#define NUM_THREADS 1
+static long num_steps = 1000000;
+double dx;
+
+int main()
+{
+  int i;
+  long double pi = 0.0;
+  long double sum = 0.0;
+  long double start_time, end_time;
+  dx = 1.0 / (long double) num_steps;
+  omp_set_num_threads(NUM_THREADS);
+  start_time = omp_get_wtime();
+#pragma omp parallel for reduction(+:sum)
+  for (i = 0; i < num_steps; i++)
+  {
+    long double x = (i + 0.5) * dx;
+    sum += 4.0 / (1.0 + x*x);
+  }
+  pi = sum * dx;
+  end_time = omp_get_wtime();
+  printf("The numerical integration of pi is %.10Lf.\n", pi);
+  printf("Execution time: %Lf seconds.", end_time - start_time);
+  return 0;
+} 
+```
+
+Note that using ```#pragma omp parallel for reduction(+:sum)``` is a good solution of summation, also the variable ```long double x```  we declared inside the parallel region is praivate for each thread.
