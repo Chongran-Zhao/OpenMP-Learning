@@ -411,6 +411,7 @@ int main()
 - OpenMP supports a variety of reduction operations, including arithmetic operations (`+`, `-`, `*`, `/`, etc.), logical operations (`&&`, `||`, `&`, `|`, `^`), and some predefined functions (`min`, `max`, etc.). You can choose the appropriate reduction operation based on the desired aggregation behavior.
 - Using the `reduction` clause simplifies the process of parallelizing reduction operations, as it handles the necessary synchronization and reduction logic automatically. It allows you to write cleaner and more concise parallel code while achieving parallelism and aggregating results efficiently.
 - **OpenMP: Reduction operands/initial-values**
+
 | Operator |   Initial Value   |Operator|Initial Value|
 | :---: | :---: | :---: | :---: |
 |  +   |   0   | & |~0|
@@ -419,4 +420,4 @@ int main()
 | Min | *Largest pos num* | && |1|
 | Max | *Most neg num* | \|\| |0|
 
-The initial value of variable to be reduced is very important。
+The initial value of variable to be reduced is very important.
