@@ -205,7 +205,8 @@ MacBook Pro CPU information:
 
 # Synchronization
 
-- **Barrier Synchronization**: Each thread wait at the *barrier* until all threads arrive (left figure).
+## Barrier Synchronization
+Each thread wait at the *barrier* until all threads arrive (figure below).
 
 ```c#
   #pragma omp parallel
@@ -216,38 +217,144 @@ MacBook Pro CPU information:
     B[id] = big_cal2(id,A);
   }
 ```
+​                                                          <img src="./figures/ IMG_2.png" alt=" IMG_2" style="zoom:60%;" />
+In OpenMP, both **implicit** and **explicit barriers** are synchronization mechanisms used to ensure that all threads reach a particular point in the code before proceeding further. The difference between them lies in how they are triggered and their visibility to the programmer.
 
-- **Mutual Exclusion Synchronization**: Define a block of code that only one thread at a time can execute (right figure).
+- Implicit Barrier:
+  - An implicit barrier is automatically inserted at the end of certain OpenMP constructs, such as `paralle`l, `for`, and `sections`.
+  - The implicit barrier ensures that all threads participating in the parallel region or loop have completed their assigned work before proceeding to the next sequential code outside the construct.
+  - The implicit barrier is added by the OpenMP runtime system and is not explicitly specified by the programmer.
+  - The implicit barrier is a fundamental feature of OpenMP that simplifies parallel programming by ensuring that all threads synchronize implicitly at specific points in the program.
+- Explicit Barrier:
+    - An explicit barrier is a synchronization point that can be explicitly specified by the programmer using the ``#pragma omp barrier` directive.
+    - The explicit barrier ensures that all threads reach the barrier point before any thread is allowed to proceed further.
+    - Unlike the implicit barrier, the explicit barrier is explicitly added by the programmer in the code.
+      The explicit barrier provides finer control over synchronization points and allows the programmer to enforce synchronization at specific locations in the code where it is necessary.
+    - Explicit barriers are especially useful when there is a need to coordinate data dependencies or when multiple threads need to synchronize their work at a particular point.
+    - In summary, the main difference between implicit and explicit barriers in OpenMP is that implicit barriers are automatically inserted by the OpenMP runtime system at the end of certain constructs, while explicit barriers are explicitly added by the programmer using the #pragma omp barrier
+    - directive. Implicit barriers simplify synchronization in most cases, while explicit barriers provide finer control over synchronization points when needed.
+### More detail about implicit barrier
+Let's dive into more detail about implicit barriers in OpenMP and their placement in specific constructs.
 
-  ```c#
-  float res;
-  #pragma omp parallel
-  {
-    float B; int i, id, num;
-    id = omp_get_thread_num();
-    num = omp_get_num_threads();
-    for (i = id; i < niters; i+ = num)
-    {
-      B = big_job(i); // big job is executed in for-loop
-      #pragma omp critical
-      res += consume(B);
-    }
-  }```
+In OpenMP, an implicit barrier is automatically inserted at the end of certain constructs to ensure synchronization among participating threads. These constructs include:
 
-​                         <img src="./figures/ IMG_2.png" alt=" IMG_2" style="zoom:60%;" />                          <img src="./figures/IMG_3.png" alt="IMG_3" style="zoom: 35%;" />
+- `parallel` Construct:
+  The parallel construct creates a team of threads that execute the code block in parallel.
+  At the end of the parallel region, an implicit barrier is inserted.
+  The barrier ensures that all threads in the team complete their parallel work before moving to the sequential part of the code outside the parallel region.
+  Example:
 
-- **Atomic Synchronization**: suitable for updating simple binary values, such as incrementing, or reading and writing a temporary value for updating.
+	```c#
+	#pragma omp parallel
+	{
+	    // Parallel work
+	    // ...
+	    // Implicit barrier at the end of the parallel region
+	}
+	```
+	
+- `for` Construct:
+  The for construct distributes loop iterations among the available threads for parallel execution.
+  At the end of the for construct, an implicit barrier is inserted.
+  The barrier ensures that all threads finish their assigned iterations before proceeding to the next sequential code outside the for loop.
+  
+	```cpp
+	#pragma omp parallel for
+	for (int i = 0; i < n; i++) {
+	    // Loop body
+		  // ...
+	    // Implicit barrier at the end of the for loop
+	}
+	```
+	
+- `sections` Construct:
+  The sections construct allows multiple code sections to be executed in parallel by different threads.
+  At the end of each section within the sections construct, an implicit barrier is inserted.
+  The barrier ensures that all threads complete their respective section before moving to the next sequential code outside the sections construct.
 
-  ```c
-  #pragma omp parallel
-  {
-  	double tmp, B;
-  	B = DOIT();
-  	tmp = big_ugly(B);
-  	#pragma omp atomic
-  	X+ = tmp;
+	```c#
+	#pragma omp parallel sections
+	{
+  	  #pragma omp section
+    	{
+      	  // Section 1
+        	// ...
+		      // Implicit barrier at the end of Section 1
+    	}
+   	 #pragma omp section
+    	{
+      	  // Section 2
+        	// ...
+      	  // Implicit barrier at the end of Section 2
+    	}
+    	// ...
+    	// Implicit barrier at the end of the sections construct
   }
   ```
+  It's important to note that these constructs provide implicit barriers by default to synchronize the participating threads. If explicit control over synchronization is needed at different points, the programmer can add explicit barriers using the #pragma omp barrier directive at desired locations in the code.
+
+	Implicit barriers help maintain the expected execution order and provide synchronization points without the need for explicit barrier directives at the end of each construct. However, explicit barriers may still be necessary in certain situations to enforce additional synchronization requirements or to coordinate data dependencies.
+	
+### Avoid the extra cost of implicit barrier
+
+```c#
+#pragma omp parallel shared(A, B, C) private(id)
+{
+  id = omp_get_thread_num();
+  A[id] = big_calc(id);
+#pragma omp barrier // explicit barrier
+#pragma omp for
+  for(i = 0; i < N; i++)
+  {
+    C[i] = big_calc3(i, A);
+  } //implicit barrier here
+#pragma omp for nowait // break the implicit barrier of next for
+  for(i = 0; i < N; i++)
+  {
+    B[i] = big_calc2(C, i);
+  }
+  A[id] = big_calc4(id); // not use the above B[i] calculated
+}
+```
+
+**Note**:The implicit barrier also incurs significant overhead in terms of execution time, so we can use `#pragma omp for nowait` to remove the implicit barrier of `#pragma omp for` when there is no need for local synchronization. In this case, `A[id] = big_calc4(id);` didn't use `B[i]` calculated from above for-loop, so we can remove the implicit barrier.
+
+## Mutual Exclusion Synchronization
+
+Define a block of code using `#pragma omp critical` that only one thread at a time can execute (figure below).
+
+```c#
+float res;
+#pragma omp parallel
+{
+  float B; int i, id, num;
+  id = omp_get_thread_num();
+  num = omp_get_num_threads();
+  for (i = id; i < niters; i+ = num)
+  {
+    B = big_job(i); // big job is executed in for-loop
+    #pragma omp critical
+    res += consume(B);
+  }
+}
+```
+
+<img src="./figures/IMG_3.png" alt="IMG_3" style="zoom: 35%;" />
+
+## Atomic Synchronization
+
+It's suitable for updating simple binary values, such as incrementing, or reading and writing a temporary value for updating.
+
+```c
+#pragma omp parallel
+{
+	double tmp, B;
+	B = DOIT();
+	tmp = big_ugly(B);
+	#pragma omp atomic
+	X+ = tmp;
+}
+```
 
 ***Notes***: The statement inside the atomic *must* be one of the following forms: ```x+ = expr```, ```x- = expr```, ```x++```, ```++x```, ```x--```, ```--x```.
 
@@ -293,10 +400,10 @@ int main()
 
 - Loop Construct
 - Sections/Section Construct
-- Single Construct
+- Matser/Single Construct
 - Task Construct
 
-## Loop Work Sharing
+## Loop Construct
 
 ```c#
 #pragma omp parallel
@@ -603,3 +710,597 @@ int main()
 ```
 
 Note that using ```#pragma omp parallel for reduction(+:sum)``` is a good solution of summation, also the variable ```long double x```  we declared inside the parallel region is praivate for each thread.
+
+## More about for-loop schedule
+
+### omp_set_schedule
+
+The function `omp_set_schedule` is a runtime library routine in OpenMP that allows you to change the scheduling behavior of parallel loops at runtime. It is used to set the scheduling kind and chunk size for subsequent parallel loops.
+
+The function `omp_set_schedule` has the following syntax:
+
+```c#
+void omp_set_schedule(omp_sched_t kind, int chunk_size);
+```
+
+The parameters of `omp_set_schedule` are as follows:
+
+- `kind`: An OpenMP enumeration type (`omp_sched_t`) that specifies the scheduling kind. It can take one of the following values:
+  - `omp_sched_static`: Static scheduling.
+  - `omp_sched_dynamic`: Dynamic scheduling.
+  - `omp_sched_guided`: Guided scheduling.
+  - `omp_sched_auto`: Compiler-selected default scheduling.
+- `chunk_size`: An integer that specifies the chunk size for the specified scheduling kind. This parameter is optional and depends on the scheduling kind. It is typically used for static and guided scheduling.
+
+Once you call `omp_set_schedule` with the desired scheduling kind and chunk size, the specified scheduling behavior will be in effect for subsequent parallel loops until it is changed again.
+
+Here's an example demonstrating the usage of `omp_set_schedule`:
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+    int chunk_size = 10;
+    omp_set_schedule(omp_sched_dynamic, chunk_size);
+
+    #pragma omp parallel for
+    for (int i = 0; i < 100; i++) {
+        // Loop body
+        printf("Thread %d executes iteration %d\n", omp_get_thread_num(), i);
+    }
+
+    return 0;
+}
+```
+
+In this example, `omp_set_schedule` is used to set dynamic scheduling with a chunk size of 10. The subsequent parallel loop will follow the specified scheduling behavior.
+
+Please note that the actual effect of `omp_set_schedule` may depend on the OpenMP implementation and runtime environment. It is recommended to consult the documentation of your specific OpenMP implementation for detailed behavior and any limitations associated with `omp_set_schedule`.
+
+
+
+### omp_get_schedule
+
+The function `omp_get_schedule` is a runtime library routine in OpenMP that allows you to retrieve the current scheduling information for a parallel loop. It can be used to query the scheduling kind and chunk size that are in effect for the current execution context.
+
+The function `omp_get_schedule` has the following syntax:
+
+```c#
+void omp_get_schedule(omp_sched_t *kind, int *chunk_size);
+```
+
+The parameters of `omp_get_schedule` are as follows:
+
+- `kind`: A pointer to an `omp_sched_t` variable where the scheduling kind will be stored. This value will be one of the following:
+  - `omp_sched_static`: Static scheduling.
+  - `omp_sched_dynamic`: Dynamic scheduling.
+  - `omp_sched_guided`: Guided scheduling.
+  - `omp_sched_auto`: Compiler-selected default scheduling.
+- `chunk_size`: A pointer to an integer variable where the chunk size will be stored. This value represents the chunk size used for static and guided scheduling. For other scheduling kinds, the chunk size value will be ignored.
+
+After calling `omp_get_schedule`, the values of `kind` and `chunk_size` will reflect the current scheduling information.
+
+Here's an example demonstrating the usage of `omp_get_schedule`:
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+    omp_sched_t kind;
+    int chunk_size;
+    omp_get_schedule(&kind, &chunk_size);
+
+    printf("Current Schedule: Kind = %d, Chunk Size = %d\n", kind, chunk_size);
+
+    #pragma omp parallel for schedule(static, 10)
+    for (int i = 0; i < 100; i++) {
+        // Loop body
+    }
+
+    omp_get_schedule(&kind, &chunk_size);
+
+    printf("Updated Schedule: Kind = %d, Chunk Size = %d\n", kind, chunk_size);
+
+    return 0;
+}
+```
+
+In this example, `omp_get_schedule` is used to retrieve the current scheduling information before and after a parallel loop. The obtained values are then printed to show the current schedule kind and chunk size.
+
+Please note that `omp_get_schedule` will return the scheduling information for the current execution context, which may be affected by the OpenMP directives or API calls preceding it. It provides a way to programmatically access the scheduling information for diagnostic or reporting purposes.
+
+## Section Construct
+
+### Introduction
+
+The `sections` construct in OpenMP is a directive that allows you to divide a parallel region into multiple named sections, which can be executed by different threads concurrently. It provides a way to assign different tasks or code sections to specific threads within the parallel region.
+
+The syntax of the `sections` construct is as follows:
+
+```c#
+#pragma omp parallel sections [clause]
+{
+    #pragma omp section
+    {
+        // Code for section 1
+    }
+    #pragma omp section
+    {
+        // Code for section 2
+    }
+    // ...
+}
+```
+
+Key points about the `sections` construct:
+
+- The `sections` construct divides the code block following it into individual sections, each marked with the `section` directive.
+- Each `section` block represents a specific task or code section that can be executed concurrently by different threads.
+- The number of sections can be determined statically or dynamically at runtime.
+- The threads within the parallel region execute the sections in parallel, and the specific assignment of sections to threads may vary across different runs or implementations.
+- The `sections` construct introduces an implicit barrier at the end, ensuring that all threads synchronize before continuing beyond the construct.
+
+Example usage of the `sections` construct:
+
+```c#
+#pragma omp parallel sections
+{
+    #pragma omp section
+    {
+        // Code for section 1
+    }
+    #pragma omp section
+    {
+        // Code for section 2
+    }
+    // Code executed concurrently by other threads
+    #pragma omp section
+    {
+        // Code for section 3
+    }
+    // ...
+}
+```
+
+In this example, the `sections` construct divides the code block following it into three sections. Each section represents a specific task or code segment that can be executed concurrently by different threads within the parallel region. The exact assignment of sections to threads is determined at runtime.
+
+The `sections` construct is useful for parallelizing independent tasks or code sections, enabling different threads to work on different parts of the problem simultaneously. It provides a structured and controlled way to assign specific sections of code to individual threads, facilitating parallel execution within the parallel region.
+
+### Advantages
+
+1. **Parallelization of independent tasks**: The `sections` construct enables you to divide the work within a parallel region into independent sections. Each section can be executed concurrently by different threads, maximizing parallelism and speeding up the overall execution.
+2. **Explicit assignment of tasks**: By using the `section` directive within the `sections` construct, you can explicitly assign specific tasks or code sections to different threads. This control allows you to distribute the workload efficiently among the available threads based on the characteristics of the tasks.
+3. **Structured approach**: The `sections` construct provides a structured and organized way to parallelize and manage different tasks or code sections. It promotes code readability and maintainability by clearly indicating the parallel sections and their respective assignments.
+
+### Disadvantages
+
+1. **Limited for irregular workloads**: The `sections` construct is most suitable for cases where the workload can be divided into known and evenly distributed sections. It may not be well-suited for irregular workloads or cases where dynamic load balancing is required.
+2. **Limited scalability**: The scalability of the `sections` construct depends on the number of available threads and the granularity of the sections. If the number of sections is significantly smaller than the number of threads, it may result in underutilization of resources and lower parallel efficiency.
+
+### Tips
+
+1. **Identify independent sections**: Determine which parts of the code can be executed independently and parallelized. Ensure that there are no data dependencies or shared resources that could cause conflicts among sections.
+2. **Balance the workload**: Try to divide the workload into sections of roughly equal size to achieve load balance among the participating threads. This helps ensure that all threads make similar progress and maximize parallel efficiency.
+3. **Avoid excessive synchronization**: Minimize the need for explicit synchronization within sections, as it can introduce additional overhead and hinder parallel performance. Synchronization should only be used when necessary to maintain correctness or enforce dependencies.
+4. **Consider the granularity**: Choose an appropriate granularity for the sections based on the nature of the tasks and the available hardware resources. Fine-grained sections may provide more parallelism but could result in increased synchronization overhead.
+5. **Profile and tune**: Measure the performance of your parallel code using the `sections` construct and profile it to identify any bottlenecks or areas for optimization. Experiment with different section assignments and parallelization strategies to achieve the best performance for your specific application.
+
+Remember that the effectiveness and performance of the `sections` construct depend on the characteristics of your code, the workload distribution, and the available hardware resources. It is recommended to experiment, profile, and benchmark your code to find the optimal use of the `sections` construct in your specific scenario.
+
+## Master Construct
+
+The `master` construct in OpenMP is a directive used to specify a block of code that should be executed by only the master thread in a parallel region. The master thread is typically the thread with thread ID 0, although it can be explicitly set using the `omp_set_num_threads` function.
+
+The syntax of the `master` construct is as follows:
+
+```c#
+#pragma omp master
+{
+    // Code executed by the master thread
+}
+```
+
+Key points about the `master` construct:
+
+- Only the master thread executes the code block within the `master` construct. Other threads in the team skip this code block.
+- The `master` construct provides a way to designate a specific task or section of code that should be executed by a single thread, typically for tasks that should be performed by only one thread, such as initialization or I/O operations.
+- The master thread completes the execution of the `master` construct before any other threads proceed to the next parallel region or construct.
+- There exists implicit barrier at the end of `master` construct.
+- The `master` construct does not introduce an implicit barrier. If synchronization is required after the `master` construct, an explicit barrier should be used.
+
+Example usage of the `master` construct:
+
+```c#
+#pragma omp parallel
+{
+    // Code executed by all threads
+    #pragma omp master
+    {
+        // Code executed only by the master thread
+        // Typically used for initialization or serial operations
+    }
+    // Code executed by all threads
+    #pragma omp barrier
+    // Explicit barrier to synchronize all threads
+}
+```
+
+In the example, the code within the `master` construct is executed only by the master thread, while other threads skip that code block. The explicit barrier after the `master` construct ensures synchronization among all threads before continuing to the next parallel region or construct.
+
+The `master` construct is useful for situations where certain tasks should be performed by a single thread, while allowing other threads to continue with their work.
+
+## Single Construct
+
+The `single` construct in OpenMP is a directive used to specify a block of code that should be executed by only one thread in a parallel region. Unlike the `master` construct, which designates the master thread as the exclusive executor, the `single` construct allows any thread to execute the enclosed code block.
+
+The syntax of the `single` construct is as follows:
+
+```c#
+#pragma omp single [clause]
+{
+    // Code executed by only one thread
+}
+```
+
+Key points about the `single` construct:
+
+- The `single` construct designates a block of code that should be executed by only one thread. It does not specify which specific thread will execute the code block.
+- When multiple `single` constructs are encountered, each construct allows only one thread to execute its corresponding code block. However, different threads may execute different `single` constructs concurrently.
+- If multiple threads encounter a `single` construct simultaneously, only one thread will enter the construct while other threads skip it. Which thread executes the construct is implementation-dependent.
+- There exists implicit barrier at the end of ` single` construct.
+- The `single` construct can have an optional clause that provides additional control over how the construct behaves. Common clauses used with the `single` construct include `nowait` and `copyprivate`.
+
+Example usage of the `single` construct:
+
+```c#
+#pragma omp parallel
+{
+    // Code executed by all threads
+    #pragma omp single
+    {
+        // Code executed by only one thread
+        // The specific thread executing this block is implementation-dependent
+    }
+    // Code executed by all threads
+}
+```
+
+In the example, the code within the `single` construct is executed by only one thread, while other threads skip that code block. The specific thread executing the block is not predetermined and may vary across different runs or implementations.
+
+The `single` construct is useful when there is a section of code that should be executed by only one thread, without specifying which thread specifically. It is commonly used for tasks such as file I/O, allocating shared resources, or performing operations that require exclusive access.
+
+## Lock Routines
+
+### Introduction
+Lock routines in OpenMP are a set of functions provided by the OpenMP API for thread synchronization and mutual exclusion. They allow you to protect critical sections of code from simultaneous access by multiple threads, ensuring that only one thread can access the protected region at a time. Locks are useful when you need to prevent race conditions and maintain data integrity in multithreaded programs.
+
+OpenMP provides several lock routines that you can use to implement different locking mechanisms:
+
+1. `omp_init_lock()`:
+   - This function initializes a simple lock, which is a basic binary lock with two states: locked and unlocked.
+   - It is typically called before the parallel region to initialize the lock.
+2. `omp_destroy_lock()`:
+   - This function destroys a lock, releasing any resources associated with it.
+   - It should be called after the parallel region or when the lock is no longer needed.
+3. `omp_set_lock()`:
+   - This function acquires a lock, blocking other threads from entering the protected region until the lock is released.
+   - If the lock is already locked by another thread, the calling thread will wait until the lock becomes available.
+4. `omp_unset_lock()`:
+   - This function releases a lock, allowing other threads to acquire it and enter the protected region.
+   - It should always be called after the critical section of code has been executed.
+5. `omp_test_lock()`:
+   - This function attempts to acquire a lock, but it returns immediately instead of waiting if the lock is already locked by another thread.
+   - It returns a boolean value indicating whether the lock was successfully acquired.
+
+Lock routines can be used to protect critical sections of code where data integrity needs to be ensured. 
+
+### Example
+
+Here's an example demonstrating the use of lock routines in OpenMP to protect a critical section of code that updates a shared counter variable:
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+    omp_lock_t lock;
+    int shared_counter = 0;
+    // Initialize the lock
+    omp_init_lock(&lock);
+    #pragma omp parallel num_threads(4)
+    {
+        int private_counter = 0;
+        // Each thread updates its private counter
+        for (int i = 0; i < 100; i++) {
+            private_counter++;
+        }
+        // Acquire the lock to update the shared counter
+        omp_set_lock(&lock);
+        shared_counter += private_counter;
+        omp_unset_lock(&lock);
+    }
+    // Destroy the lock
+    omp_destroy_lock(&lock);
+    printf("Shared counter: %d\n", shared_counter);
+    return 0;
+}
+```
+
+In this example, `omp_lock_t` is a data type used to declare a lock variable. The program creates a lock using `omp_init_lock(&lock)` and initializes a shared counter variable (`shared_counter`). Each thread has its own private counter (`private_counter`) to accumulate individual counts. The private counters are then added to the shared counter within a critical section protected by lock routines (`omp_set_lock(&lock)` and `omp_unset_lock(&lock)`).
+
+By acquiring the lock before updating the shared counter, the critical section ensures that only one thread at a time can modify the shared variable, preventing data races and ensuring the integrity of the counter. After all threads have finished updating their private counters and released the lock, the shared counter is printed.
+
+Please note that in this example, the shared counter is updated sequentially within the critical section due to the lock. If the updates to the shared counter do not have strict ordering requirements, you might consider other synchronization mechanisms like atomic operations or OpenMP reduction clauses to improve parallelism and avoid potential contention.
+
+### Lock Array
+
+In OpenMP, a lock array refers to an array of lock variables (`omp_lock_t`) used to protect multiple shared resources or critical sections in a parallel program. Each lock in the array corresponds to a specific resource or critical section and is used to provide mutual exclusion among threads accessing that resource.
+
+Using a lock array can be beneficial when you have multiple shared resources or critical sections that need to be protected independently. By assigning a lock to each resource, you can ensure that only one thread at a time can access a particular resource, preventing data races and maintaining data integrity.
+
+Here's an example of using a lock array to protect multiple critical sections:
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+#define NUM_SECTIONS 5
+
+int main() {
+    omp_lock_t lock_array[NUM_SECTIONS];
+    int shared_data[NUM_SECTIONS] = {0};
+    // Initialize the lock array
+    for (int i = 0; i < NUM_SECTIONS; i++) {
+        omp_init_lock(&lock_array[i]);
+    }
+
+    #pragma omp parallel num_threads(4)
+    {
+        int thread_id = omp_get_thread_num();
+        // Each thread updates its assigned section
+        for (int i = 0; i < NUM_SECTIONS; i++) {
+            if (i % 4 == thread_id) {
+                // Acquire the lock for the current section
+                omp_set_lock(&lock_array[i]);
+                
+                // Critical section: Update shared data for the current section
+                shared_data[i] += thread_id + 1;
+
+                // Release the lock for the current section
+                omp_unset_lock(&lock_array[i]);
+            }
+        }
+    }
+    // Destroy the lock array
+    for (int i = 0; i < NUM_SECTIONS; i++) {
+        omp_destroy_lock(&lock_array[i]);
+    }
+
+    // Print the updated shared data
+    for (int i = 0; i < NUM_SECTIONS; i++) {
+        printf("Section %d: %d\n", i, shared_data[i]);
+    }
+    return 0;
+}
+```
+
+In this example, we have an array of locks (`lock_array`) corresponding to an array of shared data (`shared_data`) divided into sections. Each thread updates its assigned section by acquiring the corresponding lock, performing the necessary operations within the critical section, and releasing the lock. By assigning a lock to each section, we ensure that only one thread can access a section at a time, preventing conflicts and ensuring the integrity of the shared data.
+
+Remember to initialize the lock array using `omp_init_lock()` before using it, destroy the locks using `omp_destroy_lock()` when they are no longer needed, and appropriately acquire and release the locks using `omp_set_lock()` and `omp_unset_lock()` respectively within critical sections of code.
+
+Using a lock array provides a structured and organized approach to protect multiple critical sections or shared resources, allowing for concurrent access while maintaining data consistency and avoiding data races.
+
+## Runtime Library Routines
+
+### `omp_in_parallel()`
+
+The function `omp_in_parallel()` is an OpenMP runtime library routine used to determine if the caller thread is currently executing in a parallel region. It returns a boolean value indicating whether the thread is inside a parallel region or not.
+
+The syntax for `omp_in_parallel()` is as follows:
+
+```c#
+int omp_in_parallel();
+```
+
+The return value of `omp_in_parallel()` is `1` if the caller thread is executing in a parallel region, and `0` if it is executing in a serial region (i.e., not in a parallel region).
+
+Here's an example illustrating the usage of `omp_in_parallel()`:
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+  if (omp_in_parallel()) {
+    printf("Thread is executing in a parallel region.\n");
+  } else {
+    printf("Thread is executing in a serial region.\n");
+  }
+  #pragma omp parallel
+  {
+    if (omp_in_parallel()) {
+      printf("Thread is executing in a parallel region.\n");
+    } else {
+      printf("Thread is executing in a serial region.\n");
+    }
+  }
+  return 0;
+}
+```
+
+In this example, the code is executed within a parallel region defined by the `#pragma omp parallel` directive. Each thread checks its execution status using `omp_in_parallel()` and prints a corresponding message indicating whether it is executing in a parallel or serial region.
+
+The output of the program would be something like:
+
+```bash
+Thread is executing in a parallel region.
+Thread is executing in a parallel region.
+Thread is executing in a parallel region.
+...
+```
+
+The `omp_in_parallel()` function is useful when you need to conditionally execute certain code based on whether the thread is inside a parallel region or a serial region. It allows you to control the behavior of the code based on the parallelism context.
+
+**Remark**: If you use `omp_get_num_threads()` outside the parallel region, the answer will be one.
+
+### `omp_get_dynamic()`
+
+**Dynamic mode**: Dynamic mode allows the OpenMP implementation to adapt the number of threads dynamically to optimize resource utilization and load balancing. It can be particularly useful in scenarios where the workload varies over time or when the number of available processors or threads changes dynamically.
+
+The function `omp_get_dynamic()` is an OpenMP runtime library routine used to query the dynamic adjustment of the number of threads in a parallel region. It allows you to check whether the dynamic adjustment of the number of threads is enabled or disabled.
+
+The syntax for `omp_get_dynamic()` is as follows:
+
+```c#
+int omp_get_dynamic();
+```
+
+The return value of `omp_get_dynamic()` is an integer that indicates the current status of dynamic thread adjustment. Here's what the return value represents:
+
+- If the return value is `0`, it means that dynamic adjustment is disabled. The number of threads used in a parallel region will be determined by the value set using `omp_set_num_threads()` or the default number of threads set by the OpenMP implementation.
+- If the return value is `1`, it means that dynamic adjustment is enabled. The number of threads used in a parallel region may be adjusted dynamically during runtime based on the environment or the `OMP_NUM_THREADS` environment variable.
+
+Here's an example demonstrating the usage of `omp_get_dynamic()`:
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+    int dynamic = omp_get_dynamic();
+
+    if (dynamic) {
+        printf("Dynamic adjustment of threads is enabled.\n");
+    } else {
+        printf("Dynamic adjustment of threads is disabled.\n");
+    }
+
+    return 0;
+}
+```
+
+In this example, the code queries the status of dynamic thread adjustment using `omp_get_dynamic()`. It prints a message indicating whether dynamic adjustment is enabled or disabled based on the return value of the function.
+
+The output of the program would be something like:
+
+```bash
+Dynamic adjustment of threads is enabled.
+```
+
+The status of dynamic thread adjustment can be useful to know when designing and debugging your parallel programs. It allows you to understand whether the number of threads in a parallel region can be adjusted dynamically during runtime. Depending on your requirements, you can use this information to make decisions about thread management and workload distribution.
+
+#### `omp_set_dynamic()`
+
+The function `omp_set_dynamic()` is an OpenMP runtime library routine used to enable or disable dynamic adjustment of the number of threads in a parallel region. It allows you to control whether the number of threads can be adjusted dynamically during runtime.
+
+The syntax for `omp_set_dynamic()` is as follows:
+
+```c#
+void omp_set_dynamic(int dynamic_threads);
+```
+
+The `dynamic_threads` argument is an integer value that determines whether dynamic thread adjustment is enabled or disabled. Here's how the argument can be set:
+
+- If `dynamic_threads` is non-zero, dynamic adjustment is enabled. The number of threads used in a parallel region may be adjusted dynamically during runtime.
+- If `dynamic_threads` is zero, dynamic adjustment is disabled. The number of threads used in a parallel region will be determined by the value set using `omp_set_num_threads()` or the default number of threads set by the OpenMP implementation.
+##### Test and Output
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+    omp_set_dynamic(1);  // Enable dynamic mode
+    #pragma omp parallel
+    {
+        // Code inside the parallel region
+        if (omp_get_dynamic()) {
+            printf("Thread %d: Dynamic mode is enabled.\n", omp_get_thread_num());
+        } else {
+            printf("Thread %d: Dynamic mode is disabled.\n", omp_get_thread_num());
+        }
+    }
+
+    return 0;
+}
+```
+
+```bash
+Thread 0: Dynamic mode is enabled.
+Thread 1: Dynamic mode is enabled.
+Thread 2: Dynamic mode is enabled.
+...
+```
+
+### `omp_get_num_procs()`
+
+The function `omp_num_procs()` is an OpenMP runtime library routine used to retrieve the number of available processors or processing units in the system. It provides information about the total number of processors that can potentially be used for parallel execution.
+
+The syntax for `omp_num_procs()` is as follows:
+
+```c#
+int omp_get_num_procs();
+```
+
+The return value of `omp_num_procs()` is an integer that represents the number of available processors or processing units in the system.
+
+Here's an example demonstrating the usage of `omp_num_procs()`:
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+    int num_procs = omp_get_num_procs();
+    printf("Number of available processors: %d\n", num_procs);
+    return 0;
+}
+```
+
+In this example, the code calls `omp_num_procs()` to retrieve the number of available processors. It then prints the value to the console.
+
+The output of the program would be something like:
+
+```bash
+Number of available processors: 8
+```
+
+The value returned by `omp_num_procs()` can be useful in various scenarios, such as determining the maximum number of threads to use in a parallel region or assessing the available resources for load balancing. It provides an insight into the system's processing capacity and can help in optimizing the performance of parallel programs.
+
+Please note that `omp_num_procs()` reports the number of available processors as seen by the OpenMP implementation and may not necessarily reflect the physical number of cores or processors on the machine. The actual behavior can vary depending on the system and OpenMP implementation.
+
+## Example5
+
+```c#
+#include <omp.h>
+#include <stdio.h>
+
+int main() {
+    // Check if in parallel region
+    if (omp_in_parallel()) {
+        printf("Currently inside a parallel region.\n");
+    } else {
+        printf("Currently not inside a parallel region.\n");
+    }
+
+    // Get dynamic adjustment status
+    int dynamic = omp_get_dynamic();
+    printf("Dynamic adjustment of threads is currently %s.\n", dynamic ? "enabled" : "disabled");
+
+    // Set dynamic adjustment to disabled
+    omp_set_dynamic(1);
+    printf("Dynamic adjustment of threads has been enabled.\n");
+
+    // Get the number of available processors
+    int num_procs = omp_get_num_procs();
+    printf("Number of available processors: %d\n", num_procs);
+
+    // Check if dynamic adjustment is still enabled
+    dynamic = omp_get_dynamic();
+    printf("Dynamic adjustment of threads is currently %s.\n", dynamic ? "enabled" : "disabled");
+
+    return 0;
+}
+```
+
