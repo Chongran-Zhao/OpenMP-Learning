@@ -1304,3 +1304,35 @@ int main() {
 }
 ```
 
+# Environment Variables
+
+Environment variables in OpenMP are global variables that can be set in the execution environment to control the behavior of OpenMP programs. These variables provide a way to configure and customize the execution of OpenMP programs without modifying the source code. All environment variables are documented at `~/.bashrc` or `~/.zshrc`.
+
+-  `export OMP_NUM_THREADS=<desired_number_of_threads>`: set the number of threads.
+
+- `export OMP_DYNAMIC=<TRUE/FALSE>`: enable or disable the dynamic mode.
+
+- `export OMP_NESTED=<TRUE/FALSE>`: enable of disable nested parallelism.
+
+- `export OMP_SCHEDULE="<type>,<chunk_size>"`: specify the default scheduling policy for *parallel loop constructs* when the `schedule` clause is not explicitly specified.
+
+- `export OMP_PROC_BIND=<option>`: control the binding of OpenMP threads to physical processing resources such as processor cores. It specifies the desired thread-to-core binding policy for parallel execution.
+
+- `export OMP_STACKSIZE=<storage>`: control the size of the stack allocated for each thread in an OpenMP parallel region. It allows you to specify the stack size to accommodate the memory requirements of your parallel program.
+
+- `export OMP_WAIT_POLICY=<PASSIVE/POSITIVE>`: control the behavior of threads waiting for synchronization points, such as barriers or critical sections. It determines the waiting policy used by the OpenMP runtime when a thread is waiting for other threads to complete their work.
+
+  ```bash
+  # Environment Variables for OpenMP
+  export OMP_NUM_THREADS=24
+  export OMP_DYNAMIC=FALSE
+  export OMP_NESTED=TRUE
+  export OMP_SCHEDULE="static,4"
+  export OMP_PROC_BIND=master
+  export OMP_STACKSIZE=256M
+  export OMP_WAIT_POLICY=POSITIVE
+  ```
+
+  ## Data Environment
+
+  
